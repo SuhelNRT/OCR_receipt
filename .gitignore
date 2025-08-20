@@ -1,3 +1,9 @@
 models/
 logs/
 debug_outputs/
+
+
+# Ignore Python-specific files
+# Byte-code / temporary files
+__pycache__/
+*.pyc

@@ -26,13 +26,7 @@ def process_receipt():
     try:
         validate_image_file(filepath)
         
-        result = process_receipt_pipeline(
-            image_path=filepath,
-            yolo_model=model_manager.yolo,
-            ocr_reader=model_manager.ocr,
-            ner_tokenizer=model_manager.ner_tokenizer,
-            ner_model=model_manager.ner_model
-        )
+        result = process_receipt_pipeline(filepath)
         
         return jsonify({"status": "success", "result": result})
     
@@ -42,8 +36,7 @@ def process_receipt():
     finally:
         cleanup_temp_file(filepath)  # Ensure cleanup
 
-# ... rest of your app.py ...
-
+        
 @app.route('/health')
 def health():
     return jsonify({"status": "healthy"})
