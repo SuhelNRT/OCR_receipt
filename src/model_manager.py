@@ -6,6 +6,7 @@ import os
 import numpy as np
 import time
 import logging
+import re
 
 
 # Initialize logger
@@ -25,7 +26,9 @@ from config.settings import (
     NER_MODEL_PATH,
     OCR_LANGUAGES,
     YOLO_ONNX_INPUT_SIZE,
-    YOLO_ONNX_CONF_THRESHOLD
+    YOLO_ONNX_CONF_THRESHOLD,
+    CUSTOM_EASYOCR_MODEL_DIR,
+    CUSTOM_EASYOCR_NETWORK_NAME
 )
 
 class ModelManager:
@@ -107,14 +110,50 @@ class ModelManager:
                     valid_langs = ['en']
                     logger.warning(f"No valid OCR languages specified, defaulting to ['en']")
 
-                # Initialize reader
-                self._ocr = easyocr.Reader(
-                    lang_list=valid_langs,
-                    gpu=torch.cuda.is_available(),
-                    download_enabled=False  # Ensure models are pre-downloaded
-                )
+                # Clean network name (remove quotes and spaces)
+                clean_network_name = re.sub(r'[\"\']', '', CUSTOM_EASYOCR_NETWORK_NAME.strip())
 
-                logger.info(f"EasyOCR initialized in {time.time() - start_time:.2f}s with languages: {valid_langs}")
+                # Check if custom model directory exists
+                if not os.path.exists(CUSTOM_EASYOCR_MODEL_DIR):
+                    logger.warning(f"Custom OCR model directory not found: {CUSTOM_EASYOCR_MODEL_DIR}")
+                    logger.info("Falling back to standard EasyOCR model")
+                    self._ocr = easyocr.Reader(
+                        lang_list=valid_langs,
+                        gpu=torch.cuda.is_available(),
+                        download_enabled=False
+                    )
+                else:
+                    logger.info(f"Loading CUSTOM EasyOCR model: {CUSTOM_EASYOCR_NETWORK_NAME}")
+                    logger.info(f"Model directory: {CUSTOM_EASYOCR_MODEL_DIR}")
+
+                    # THIS IS THE KEY - MATCH YOUR WORKING CODE EXACTLY
+                    self._ocr = easyocr.Reader(
+                        lang_list=valid_langs,
+                        model_storage_directory=CUSTOM_EASYOCR_MODEL_DIR,
+                        recog_network=clean_network_name,  #CUSTOM_EASYOCR_NETWORK_NAME,
+                        gpu=torch.cuda.is_available(),
+                        download_enabled=False
+                    )
+
+                    logger.info(f"CUSTOM EasyOCR initialized in {time.time() - start_time:.2f}s")
+                    logger.info(f"Using network: {CUSTOM_EASYOCR_NETWORK_NAME}")
+
+                # Initialize reader
+                # self._ocr = easyocr.Reader(
+                #     lang_list=valid_langs,
+                #     gpu=torch.cuda.is_available(),
+                #     download_enabled=False  # Ensure models are pre-downloaded
+                # )
+
+                # # Custom EasyOCR Reader
+                # self._ocr = easyocr.Reader(
+                #     ['en'],
+                #     model_storage_directory=CUSTOM_EASYOCR_MODEL_DIR, 
+                #     recog_network='custom_example', # 'english_g2' # filename without extension
+                #     gpu=torch.cuda.is_available(), #True  # set True if you have GPU
+                # )
+
+                # logger.info(f"EasyOCR initialized in {time.time() - start_time:.2f}s with languages: {valid_langs}")
 
             except Exception as e:
                 logger.error(f"Failed to initialize EasyOCR: {str(e)}", exc_info=True)

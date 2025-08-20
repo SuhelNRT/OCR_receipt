@@ -1,6 +1,7 @@
 models/
 logs/
 debug_outputs/
+model/
 
 
 # Ignore Python-specific files

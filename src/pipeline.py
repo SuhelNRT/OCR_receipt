@@ -222,7 +222,8 @@ def process_receipt_pipeline(image_path: str) -> dict:
 
 
         with step_logger("postprocessing", filename=filename):
-            final_kv = postprocess_kv_pairs(entities)
+            # final_kv = postprocess_kv_pairs(entities)
+            final_kv = entities
             artifacts["final_output"] = final_kv
             log_step("postprocessing", "completed", 
                         filename=filename, 
