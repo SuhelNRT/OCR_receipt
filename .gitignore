@@ -6,5 +6,11 @@ model/
 
 # Ignore Python-specific files
 # Byte-code / temporary files
+# Ignore Python cache files
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+
+
+test/

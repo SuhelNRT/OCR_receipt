@@ -1,0 +1,11 @@
+set ENABLE_DEBUG_SAVE=true
+
+set DEBUG_OUTPUT_DIR=debug_outputs
+
+
+
+set OCR_MODEL_PATH="models/easyocr"
+
+set OCR_NETWORK_NAME="custom_example" 
+
+set OCR_NETWORK_NAME="english_g2"

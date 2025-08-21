@@ -13,6 +13,7 @@ from config.settings import ENABLE_DEBUG_SAVE, YOLO_ONNX_INPUT_SIZE, YOLO_ONNX_C
 import numpy as np
 from src.model_manager import model_manager
 from contextlib import contextmanager
+from src.postprocessing import organise_ner_result
 
 
 @contextmanager
@@ -61,6 +62,7 @@ def process_receipt_pipeline(image_path: str) -> dict:
     yolo_session = model_manager.yolo
     ocr_reader = model_manager.ocr
     ner_tokenizer, ner_model = model_manager.ner
+    # ner_pipeline = model_manager.ner_pipeline
     
     try :
         with step_logger("load_image", filename=filename):
@@ -153,77 +155,30 @@ def process_receipt_pipeline(image_path: str) -> dict:
             if not raw_text.strip():
                 raise ValueError("No text extracted from image")
             
-            inputs = ner_tokenizer(
-                raw_text,
-                return_tensors="pt",
-                truncation=True,
-                max_length=512,
-                padding="max_length",
-                # return_offsets_mapping = True
-            )
+            try:
+                ner_pipeline = model_manager.ner_pipeline
+                ner_results = ner_pipeline(raw_text)
 
-            # Move to GPU if available
-            device = next(ner_model.parameters()).device
-            inputs = {k: v.to(device) for k, v in inputs.items()}
-
-            # Inference
-            with torch.no_grad():
-                outputs = ner_model(**inputs)
-
-            # Get predictions
-            predictions = torch.argmax(outputs.logits, dim=2).cpu().numpy()
-            input_ids = inputs["input_ids"].cpu().numpy()[0]
-            # offsets = inputs.get("offset_mapping", None)
-
-            # Convert to tokens and labels
-            tokens = ner_tokenizer.convert_ids_to_tokens(input_ids)
-            labels = [ner_model.config.id2label[p] for p in predictions[0]]
-
-            entities = {}
-            current_key = None
-            current_tokens = []
-            # current_start = None
-
-            for i, (token, label) in enumerate(zip(tokens, labels)):
-                if label.startswith("B-"):
-                    # Save previous entity
-                    if current_key and current_tokens:
-                        value = " ".join(current_tokens).strip()
-                        if value:
-                            entities[current_key] = value
-                    
-                    # Start new entity
-                    current_key = label[2:]  # Remove "B-" prefix
-                    current_tokens = [token.replace("##", "")]
-                    # current_start = i
+                final_entities = organise_ner_result(ner_results)
                 
-                elif label.startswith("I-") and current_key == label[2:]:
-                    current_tokens.append(token.replace("##", ""))
+                artifacts["ner_entities"] = final_entities
+                log_step("ner_extraction", "completed", 
+                        filename=filename, 
+                        num_items=len(final_entities.get("items", [])),
+                        shop_name=final_entities.get("shop", {}).get("name", "unknown"))
                 
-                else:
-                    # End current entity
-                    if current_key and current_tokens:
-                        value = " ".join(current_tokens).strip()
-                        if value:
-                            entities[current_key] = value
-                        current_key = None
-                        current_tokens = []
-            
-            # Final entity
-            if current_key and current_tokens:
-                value = " ".join(current_tokens).strip()
-                if value:
-                    entities[current_key] = value
-            
-            artifacts["ner_entities"] = entities
-            log_step("ner_extraction", "completed", 
-                    filename=filename, 
-                    num_entities=len(entities))
 
+            except Exception as e:
+                log_step("ner_extraction", "failed", 
+                        filename=filename, 
+                        error=str(e), 
+                        error_type=type(e).__name__)
+                raise
+            
 
         with step_logger("postprocessing", filename=filename):
             # final_kv = postprocess_kv_pairs(entities)
-            final_kv = entities
+            final_kv = final_entities
             artifacts["final_output"] = final_kv
             log_step("postprocessing", "completed", 
                         filename=filename, 

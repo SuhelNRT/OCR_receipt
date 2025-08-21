@@ -1,12 +1,13 @@
 import onnxruntime as ort
 import easyocr
-from transformers import AutoTokenizer, AutoModelForTokenClassification
+from transformers import AutoTokenizer, AutoModelForTokenClassification, pipeline
 import torch
 import os
 import numpy as np
 import time
 import logging
 import re
+import time
 
 
 # Initialize logger
@@ -48,6 +49,7 @@ class ModelManager:
         self._ocr = None
         self._ner_tokenizer = None
         self._ner_model = None
+        self._ner_pipeline = None
         self._initialized = True
 
     # def _load_models(self):
@@ -192,5 +194,37 @@ class ModelManager:
                 raise
 
         return self._ner_tokenizer, self._ner_model
+
+
+    @property
+    def ner_pipeline(self):
+        if self._ner_pipeline is None:
+            logger.info("Initializing NER pipeline with aggregation strategy...")
+            start_time = time.time()
+
+            try:
+                # Load model and tokenizer if not already loaded
+                if self._ner_model is None or self._ner_tokenizer is None:
+                    self._ner_tokenizer, self._ner_model = self.ner
+
+                # Create pipeline with aggregation
+                self._ner_pipeline = pipeline(
+                    "token-classification",
+                    model=self._ner_model,
+                    tokenizer=self._ner_tokenizer,
+                    aggregation_strategy="simple",  # Key parameter for grouping entities
+                    device=0 if torch.cuda.is_available() else -1
+                )
+                
+                logger.info(f"NER pipeline initialized in {time.time() - start_time:.2f}s")
+                logger.debug(f"NER pipeline using device: {'GPU' if torch.cuda.is_available() else 'CPU'}")
+                
+            except Exception as e:
+                logger.error(f"Failed to initialize NER pipeline: {str(e)}", exc_info=True)
+                raise
+
+        return self._ner_pipeline
+
+
 
 model_manager = ModelManager()

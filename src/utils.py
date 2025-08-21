@@ -4,6 +4,7 @@ import os
 from PIL import Image
 from datetime import datetime
 from contextlib import contextmanager
+import re
 
 
 logging.basicConfig(
@@ -65,3 +66,32 @@ def load_image_from_path(image_path: str) -> Image.Image:
 def cleanup_temp_file(filepath: str):
     if os.path.exists(filepath):
         os.remove(filepath)
+
+def clean_text(text: str) -> str:
+    """Clean extracted text"""
+    if not text:
+        return ""
+    # Remove extra spaces and fix common OCR errors
+    text = re.sub(r'\s+', ' ', text)
+    text = re.sub(r'\s+([.,;:])', r'\1', text)  # Fix spaces before punctuation
+    return text.strip()
+
+def clean_currency(text: str) -> str:
+    """Clean currency values"""
+    if not text:
+        return ""
+    # Extract numbers and decimal points, preserve $ at start
+    cleaned = re.sub(r'[^\d.$]', '', text)
+    # Fix common OCR errors like "1. 00" -> "1.00"
+    cleaned = re.sub(r'(\d)\s+(\.\d+)', r'\1\2', cleaned)
+    return cleaned
+
+def clean_date(text: str) -> str:
+    """Clean and standardize date format"""
+    if not text:
+        return ""
+    # Remove non-date characters
+    cleaned = re.sub(r'[^0-9/]', '', text)
+    # Remove extra slashes
+    cleaned = re.sub(r'/+', '/', cleaned)
+    return cleaned.strip('/')
