@@ -14,6 +14,7 @@ import numpy as np
 from src.model_manager import model_manager
 from contextlib import contextmanager
 from src.postprocessing import organise_ner_result
+from src.preprocessing import find_best_resize_factor_adaptive
 
 
 @contextmanager
@@ -114,43 +115,19 @@ def process_receipt_pipeline(image_path: str) -> dict:
         
 
         with step_logger("ocr_extraction", filename=filename):
-            ocr_results = ocr_reader.readtext(cropped_image)
 
-        
-            # img_np = np.array(cropped_image)
-            # ocr_results = ocr_reader.readtext(cropped_image,detail=1)
+            raw_text = ''
 
-            # # Sort by vertical position then horizontal
-            # # ocr_results.sort(key=lambda x: (x[0][0][1], x[0][0][0]))
-            # ocr_results.sort(key=lambda x: (
-            # sum(p[1] for p in x[0]) / 4,  # y-center of bbox
-            # sum(p[0] for p in x[0]) / 4   # x-center of bbox
-            # ))
+            # ocr_results = ocr_reader.readtext(cropped_image)
 
-            # # # Group by lines
-            # lines = {}
-            # for (bbox, text, prob) in ocr_results:
-            #     #y_pos = bbox[0][1]
-            #     y_center = sum(p[1] for p in bbox) / 4
-            #     # line_key = round(y_pos / 15)  # Group every ~15px vertically
-            #     line_key = round(y_center / 20) 
-            #     lines.setdefault(line_key, []).append({
-            #         "text": text,
-            #         "confidence": prob
-            #     })
-
-            # # # Join text
-            # raw_text = "\n".join([
-            #     " ".join([item["text"] for item in items]) 
-            #     for k in sorted(lines) for items in [lines[k]]
-            # ])
-
-            raw_text = "\n".join([text for (bbox, text, prob) in ocr_results ])
+            # raw_text = "\n".join([text for (bbox, text, prob) in ocr_results ])
+            
+            raw_text, resized_factor = find_best_resize_factor_adaptive(cropped_image, ocr_reader)
             
             artifacts["raw_text"] = raw_text
             log_step("ocr_extraction", "completed", 
                     filename=filename, 
-                    # num_lines=len(lines),
+                    resized_factor=resized_factor,
                     char_count=len(raw_text))
             
 
@@ -159,6 +136,7 @@ def process_receipt_pipeline(image_path: str) -> dict:
                 raise ValueError("No text extracted from image")
             
             try:
+                final_entities = dict()
                 ner_pipeline = model_manager.ner_pipeline
                 ner_results = ner_pipeline(raw_text)
 

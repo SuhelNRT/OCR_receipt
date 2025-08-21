@@ -74,7 +74,10 @@ def postprocess_kv_pairs(entities: dict) -> dict:
 # ---------------------------------------  NER Result organisation  -----------------
 
 # Initialize structured output
-structured_entities = {
+
+def organise_ner_result(ner_results):
+
+    structured_entities = {
                     "shop": {},
                     "items": [],
                     "invoice_id": "",
@@ -85,9 +88,7 @@ structured_entities = {
                 }
 
 
-item_fields = {"product_name", "product_price", "product_qty"}
-
-def organise_ner_result(ner_results):
+    item_fields = {"product_name", "product_price", "product_qty"}
 
     current_item = {}
 

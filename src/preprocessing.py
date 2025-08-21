@@ -117,3 +117,72 @@ def postprocess_output(output, orig_size, resized_size, padding, conf_threshold)
     except Exception as e:
         raise ValueError(f"Postprocessing failed: {str(e)}")
     
+
+def find_best_resize_factor_adaptive(
+    image, 
+    reader, 
+    min_confidence: float = 0.1,
+    min_detections: int = 2,
+    step: float = 0.2,
+    max_steps: int = 2,
+    improvement_threshold: float = 0.01
+):
+    """
+    Adaptive resize factor selection with reduced OCR calls.
+    Returns:
+        best_text   -> full OCR text
+        best_factor -> resize factor chosen
+        best_conf   -> average confidence
+        best_resized-> best resized image
+    """
+    # image = cv2.imread(image_path)
+    if image is None:
+        raise ValueError("Could not load image")
+
+    h, w = image.shape[:2]
+    results = {}
+    best_text = ''
+    best_factor = 1
+    best_ocr = ''
+    best_conf = 0.1
+
+    def ocr_and_evaluate(img):
+        try:
+            ocr_result = reader.readtext(img, detail=1, paragraph=False)
+            valid = [det for det in ocr_result if det[2] >= min_confidence]
+            avg_conf = np.mean([det[2] for det in valid]) if len(valid) >= min_detections else 0.0
+            return avg_conf, len(valid), ocr_result
+        except Exception:
+            return 0.0, 0, []
+
+    def resize_and_eval(factor):
+        if factor in results:   # skip if already computed
+            return results[factor]
+        new_size = (int(w * factor), int(h * factor))
+        interp = cv2.INTER_LANCZOS4 if factor > 1 else cv2.INTER_AREA
+        resized = cv2.resize(image, new_size, interpolation=interp)
+        avg_conf, num_dets, ocr_result = ocr_and_evaluate(resized)
+        results[factor] = (avg_conf, num_dets, resized, ocr_result)
+        return results[factor]
+
+    # --- Phase 1: Start with original size ---
+    best_factor = 1.0
+    best_conf, _, best_resized, best_ocr = resize_and_eval(best_factor)
+
+    # --- Phase 2: Explore up and down adaptively ---
+    for direction in [-1, 1]:  # smaller, larger
+        factor = 1.0 + direction * step
+        steps_done = 0
+        while steps_done < max_steps:
+            conf, _, resized, ocr_result = resize_and_eval(factor)
+            if conf > best_conf + improvement_threshold:
+                best_conf, best_factor, best_resized, best_ocr = conf, factor, resized, ocr_result
+                factor += direction * step / 2   # keep exploring in same direction
+            else:
+                break  # stop exploring if no improvement
+            steps_done += 1
+
+    # --- Final best text ---
+    best_text = "\n".join([det[1] for det in best_ocr])
+
+    return best_text, best_factor #best_text, best_factor, best_conf, best_resized 
