@@ -1,3 +1,5 @@
+conda activate benefit_env
+
 set ENABLE_DEBUG_SAVE=true
 
 set DEBUG_OUTPUT_DIR=debug_outputs
